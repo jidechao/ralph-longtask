@@ -4,6 +4,8 @@
 
 Ralph CLI 是一个 Node.js 命令行工具，通过循环调度 Claude CLI，将 `prd.json` 中的用户故事逐个交给 AI 自主完成，无需人工干预。
 
+> **快速开始请参阅 [USER_GUIDE.md](USER_GUIDE.md)**
+
 ---
 
 ## 解决什么问题
@@ -151,6 +153,17 @@ ralph.js              ← 入口，主循环
 
 各模块职责单一，通过配置对象解耦，可独立测试。
 
+### 权限模式
+
+`lib/executor.js` 根据 `config.permissionsMode` 构建不同的 CLI 参数：
+
+| 模式 | 传递参数 | 行为 |
+|------|----------|------|
+| `"full"` (默认) | `-p --dangerously-skip-permissions --allowedTools all` | 无限制访问 |
+| `"restricted"` | `-p` | 遵循 Claude CLI 默认权限策略 |
+
+可通过配置文件或 `RALPH_PERMISSIONS_MODE` 环境变量设置。
+
 ---
 
 ## prd.json 格式
@@ -212,6 +225,7 @@ ralph --config /path/to/project
   "progressPath": "./progress.txt",
   "maxIterations": 10,
   "cooldownSeconds": 3,
+  "permissionsMode": "full",
 
   "claude": {
     "maxTurns": 50,
@@ -233,7 +247,7 @@ ralph --config /path/to/project
 }
 ```
 
-环境变量覆盖：`RALPH_CLAUDE_MAX_TURNS`、`RALPH_MAX_ITERATIONS`、`RALPH_COOLDOWN_SECONDS` 等，详见 `templates/USER_GUIDE.md`。
+环境变量覆盖：`RALPH_PERMISSIONS_MODE`、`RALPH_CLAUDE_MAX_TURNS`、`RALPH_MAX_ITERATIONS`、`RALPH_COOLDOWN_SECONDS` 等，详见 `USER_GUIDE.md`。
 
 ---
 
