@@ -1,6 +1,7 @@
 #!/usr/bin/env node
 
 import { copyFileSync, existsSync, unlinkSync } from 'node:fs';
+import { execSync } from 'node:child_process';
 import chalk from 'chalk';
 import { loadConfig } from './lib/config.js';
 import { loadPRD, getNextStory } from './lib/prd.js';
@@ -8,6 +9,8 @@ import { buildPrompt } from './lib/prompt-builder.js';
 import { findClaudeBinary, executeSession } from './lib/executor.js';
 import { runValidation } from './lib/validator.js';
 import { initProgress, appendProgress } from './lib/progress.js';
+
+let activeChild = null;
 
 // --- CLI argument parsing ---
 
@@ -72,11 +75,13 @@ async function main() {
           console.log(chalk.yellow('Restored prd.json from backup, retrying...'));
           try {
             prd = loadPRD(config.prdPath);
-          } catch {
+          } catch (e) {
             console.error(chalk.red('prd.json still corrupt after restore'));
+            console.warn('ralph: PRD still corrupt after restore:', e.message);
             process.exit(1);
           }
-        } catch {
+        } catch (e) {
+          console.warn('ralph: backup restore failed:', e.message);
           process.exit(1);
         }
       } else {
@@ -94,20 +99,21 @@ async function main() {
     // Backup prd.json
     try {
       copyFileSync(config.prdPath, bakPath);
-    } catch {}
+    } catch (e) { console.warn('ralph: PRD backup warning:', e.message); }
 
     // Build prompt
     const { prompt } = await buildPrompt(story, config.prompts, prd);
 
     // Execute session
-    const sessionStart = new Date().toLocaleString();
+    const sessionStart = new Date().toISOString();
     let result;
     try {
-      result = await executeSession(prompt, config.claude, {
+      result = await executeSession(prompt, config, {
         iteration: i,
         maxIterations: config.maxIterations,
         story,
       });
+      activeChild = result.child;
     } catch (err) {
       if (err.message.includes('not found')) {
         console.error(chalk.red(err.message));
@@ -122,7 +128,7 @@ async function main() {
       continue;
     }
 
-    const sessionEnd = new Date().toLocaleString();
+    const sessionEnd = new Date().toISOString();
 
     // Log non-zero exit code as warning (max-turns reached is common, work may still be done)
     if (result.error) {
@@ -149,7 +155,7 @@ async function main() {
             try {
               copyFileSync(bakPath, config.prdPath);
               console.log(chalk.yellow('Restored prd.json from backup'));
-            } catch {}
+            } catch (e) { console.warn('ralph: backup restore warning:', e.message); }
           }
 
           appendProgress(config.progressPath, {
@@ -186,7 +192,7 @@ async function main() {
         console.log(chalk.green('\nAll stories completed!'));
         process.exit(0);
       }
-    } catch {}
+    } catch (e) { console.warn('ralph: post-iteration PRD check warning:', e.message); }
   }
 
   // Max iterations reached
@@ -202,25 +208,23 @@ function sleep(ms) {
 function cleanupBackup(prdPath) {
   const bakPath = prdPath + '.bak';
   if (existsSync(bakPath)) {
-    try { unlinkSync(bakPath); } catch {}
+    try { unlinkSync(bakPath); } catch (e) { console.warn('ralph: backup cleanup warning:', e.message); }
   }
 }
 
 // --- SIGINT handler ---
 
-import { execSync as _execSync } from 'node:child_process';
-
-global.__ralph_child = null;
 process.on('SIGINT', () => {
-  const child = global.__ralph_child;
-  if (child) {
+  if (activeChild) {
     try {
       if (process.platform === 'win32') {
-        _execSync(`taskkill /T /F /PID ${child.pid}`, { stdio: 'pipe' });
+        execSync(`taskkill /T /F /PID ${activeChild.pid}`, { stdio: 'pipe' });
       } else {
-        child.kill('SIGTERM');
+        activeChild.kill('SIGTERM');
       }
-    } catch {}
+    } catch (e) {
+      console.warn('ralph: SIGINT handler warning:', e.message);
+    }
   }
   process.exit(130);
 });
