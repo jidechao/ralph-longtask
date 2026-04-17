@@ -263,10 +263,3 @@ my-project/
 └── src/                    ← 项目源代码
 ```
 
----
-
-## 实战效果
-
-Ralph 曾成功驱动 JetLog 媒体库功能的完整开发，16 个用户故事（US-001 至 US-016）全部自动完成，包含实体创建、Service 层、Controller 层、DTO、MyBatis-Plus Mapper、前端页面等全栈实现。
-
-进度日志记录在 `scripts/ralph/progress.txt`，可作为参考。
