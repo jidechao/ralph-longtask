@@ -9,6 +9,7 @@ import { buildPrompt } from './lib/prompt-builder.js';
 import { findClaudeBinary, executeSession } from './lib/executor.js';
 import { runValidation } from './lib/validator.js';
 import { initProgress, appendProgress } from './lib/progress.js';
+import { checkAndArchive } from './lib/archive.js';
 
 let activeChild = null;
 
@@ -59,6 +60,24 @@ async function main() {
 
   // Init progress
   initProgress(config.progressPath);
+
+  // Check for branch change and archive previous run
+  try {
+    const prd = loadPRD(config.prdPath);
+    if (prd.branchName) {
+      const result = checkAndArchive({
+        configDir: config._configDir || process.cwd(),
+        prdPath: config.prdPath,
+        progressPath: config.progressPath,
+        branchName: prd.branchName,
+      });
+      if (result.archived) {
+        console.log(chalk.yellow(`Archived previous run to ${result.archivePath}`));
+      }
+    }
+  } catch (e) {
+    // No prd.json yet or parse error — skip archive check
+  }
 
   // Main loop
   for (let i = 1; i <= config.maxIterations; i++) {
