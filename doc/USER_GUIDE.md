@@ -206,6 +206,19 @@ Ralph 从当前工作目录开始，向上逐级搜索 `ralph.config.json`，直
 | `validation.patchPrdPasses` | `true` | git commit 存在但 passes 仍为 false 时自动修补 |
 | `validation.validatePrdSchema` | `true` | 检查 prd.json 结构完整性 |
 
+#### 权限设置
+
+| 字段 | 默认值 | 说明 |
+|------|--------|------|
+| `permissionsMode` | `"full"` | Claude CLI 权限模式：`"full"` 或 `"restricted"` |
+
+- **`"full"`**：传递 `--dangerously-skip-permissions --allowedTools all`，Claude 拥有完全的系统访问权限（文件读写、命令执行等）。**此模式适用于受控环境，请确保你了解风险。**
+- **`"restricted"`**：仅传递 `-p`，Claude 的工具使用将受到默认权限限制，某些操作需要手动确认。
+
+> **⚠️ 安全提示：** `full` 模式会跳过所有权限检查，Claude 可以执行任意命令和文件操作。在共享环境或生产环境中建议使用 `restricted` 模式。
+
+环境变量覆盖：`RALPH_PERMISSIONS_MODE=restricted`
+
 ### 路径解析规则
 
 - 相对路径基于 **配置文件所在目录**（无配置文件时基于 CWD）
@@ -232,6 +245,7 @@ Ralph 从当前工作目录开始，向上逐级搜索 `ralph.config.json`，直
 | `RALPH_PROGRESS_PATH` | `progressPath` |
 | `RALPH_MAX_ITERATIONS` | `maxIterations` |
 | `RALPH_COOLDOWN_SECONDS` | `cooldownSeconds` |
+| `RALPH_PERMISSIONS_MODE` | `permissionsMode` |
 | `RALPH_CLAUDE_MAX_TURNS` | `claude.maxTurns` |
 | `RALPH_CLAUDE_OUTPUT_FORMAT` | `claude.outputFormat` |
 | `RALPH_PROMPTS_AGENT_INSTRUCTION_PATH` | `prompts.agentInstructionPath` |
@@ -317,3 +331,9 @@ ralph 5
 # 关闭冷却，加快速度
 RALPH_COOLDOWN_SECONDS=0 ralph
 ```
+
+---
+
+## 更多信息
+
+- 架构设计和模块详解：参见 [ralph-cli.md](ralph-cli.md)
