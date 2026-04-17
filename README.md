@@ -144,30 +144,49 @@ notes              ← 给 AI 的额外提示
 
 ## 结合 Claude Code 的完整工作流
 
+Ralph 内置了两个 Claude Code 技能（Skill），帮你从零开始自动化整个流程：
+
+| 技能 | 作用 | 触发方式 |
+|------|------|----------|
+| **prd** | 根据功能描述生成结构化 PRD 文档 | 告诉 Claude Code "帮我创建一个 PRD" |
+| **ralph** | 将 PRD 文档转换为 prd.json 格式 | 告诉 Claude Code "把这个 PRD 转为 prd.json" |
+
 ### 工作流总览
 
 ```
-产品经理写 PRD → 转为 prd.json → ralph 自动执行 → 检查结果
+用 prd 技能生成 PRD → 用 ralph 技能转为 prd.json → ralph 自动执行 → 检查结果
 ```
 
-### 第 1 步：用 Claude Code 生成 PRD
+### 第 1 步：用 prd 技能生成 PRD
 
-在 Claude Code 中：
+在 Claude Code 中，描述你要做的功能：
 
 ```
 请帮我创建一个 PRD 文档。功能是：[描述你的功能需求]
 ```
 
-回答 Claude Code 的澄清问题，它会帮你生成结构化的需求文档。
+Claude Code 会通过 **prd 技能** 自动：
+1. 问你几个关键问题（目标用户、核心功能、范围等），你只需回答如 "1A, 2C, 3B"
+2. 根据你的回答生成结构化 PRD 文档
+3. 保存到 `tasks/prd-[功能名].md`
 
-### 第 2 步：转为 prd.json 格式
+> **prd 技能的价值**：自动拆分用户故事、生成可验证的验收标准、明确功能边界，避免需求模糊导致 AI 实现跑偏。
+
+### 第 2 步：用 ralph 技能转为 prd.json
 
 继续在 Claude Code 中：
 
 ```
-请把这个 PRD 转换为 prd.json 格式，每个用户故事要足够小，
-能在一次 Claude Code 会话中完成。
+请把这个 PRD 转换为 prd.json 格式
 ```
+
+Claude Code 会通过 **ralph 技能** 自动：
+1. 将每个用户故事转为 JSON 格式，确保粒度足够小（一轮能完成）
+2. 按依赖关系排序（数据库 → 后端 → 前端）
+3. 为每个故事添加可验证的验收标准
+4. 保存为 `prd.json`
+
+> **ralph 技能的价值**：自动处理故事拆分和排序，避免人工编排时遗漏依赖关系或故事过大导致 AI 做不完。
 
 ### 第 3 步：运行 Ralph
 
@@ -240,6 +259,13 @@ node ralph.js      # 不用全局安装，直接运行
 ├── CLAUDE.md             ← 项目约定（可选，Claude Code 自动读取）
 ├── ralph.config.json     ← 配置文件（可选，不创建就用默认值）
 └── src/                  ← 你的项目代码
+
+ralph-longtask/           ← Ralph 工具本身
+├── skills/
+│   ├── prd/SKILL.md      ← PRD 生成技能（Claude Code 自动调用）
+│   └── ralph/SKILL.md    ← PRD 转换技能（Claude Code 自动调用）
+├── templates/RALPH.md    ← AI 指令模板
+└── ...
 ```
 
 ---
