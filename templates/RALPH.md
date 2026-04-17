@@ -1,3 +1,5 @@
+<!-- This template is in English. Customize with your preferred language. -->
+
 # Ralph Agent Instructions
 
 You are an autonomous coding agent responsible for implementing user stories in a software project.
