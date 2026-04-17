@@ -198,7 +198,7 @@ ralph.js              ← 入口，主循环
 
 ```bash
 # 安装依赖
-cd ralph-cli && npm install
+cd ralph-longtask && npm install
 
 # 全局安装（可选）
 npm link

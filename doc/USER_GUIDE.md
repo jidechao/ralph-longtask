@@ -8,7 +8,7 @@
 
 ### 全局安装
 ```bash
-cd ralph-cli
+cd ralph-longtask
 npm install
 npm link
 ```
