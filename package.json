@@ -4,7 +4,8 @@
   "description": "Node.js CLI tool for automated iterative execution of user stories via Claude CLI",
   "type": "module",
   "bin": {
-    "ralph": "./ralph.js"
+    "ralph": "./ralph.js",
+    "ralph-pipeline": "./ralph-pipeline.js"
   },
   "engines": {
     "node": ">=18"

@@ -102,6 +102,7 @@ ralph [max_iterations] [--config <path>]
 |------|------|------|
 | `max_iterations` | 位置参数，最大迭代次数 | `ralph 5` |
 | `--config` | 指定配置文件所在目录 | `ralph --config /path/to/project` |
+| `--resume` | 跳过 progress 初始化和 archive 检查，从中断处恢复 | `ralph --resume` |
 
 ---
 
@@ -137,8 +138,7 @@ Ralph 从当前工作目录开始，向上逐级搜索 `ralph.config.json`，直
   "permissionsMode": "full",
 
   "claude": {
-    "maxTurns": 30,
-    "outputFormat": "text"
+    "maxTurns": 50,
   },
 
   "prompts": {
@@ -155,7 +155,11 @@ Ralph 从当前工作目录开始，向上逐级搜索 `ralph.config.json`，直
   "validation": {
     "checkGitCommit": true,
     "patchPrdPasses": true,
-    "validatePrdSchema": true
+    "validatePrdSchema": true,
+    "acceptanceCommands": {
+      "typecheck": "",
+      "tests": ""
+    }
   }
 }
 ```
@@ -176,7 +180,6 @@ Ralph 从当前工作目录开始，向上逐级搜索 `ralph.config.json`，直
 | 字段 | 默认值 | 说明 |
 |------|--------|------|
 | `claude.maxTurns` | `50` | Claude 单次会话最大轮次 |
-| `claude.outputFormat` | `"text"` | 输出格式：`"text"` 或 `"stream-json"` |
 
 #### 提示词设置
 
@@ -199,13 +202,17 @@ Ralph 从当前工作目录开始，向上逐级搜索 `ralph.config.json`，直
 ```
 每个 glob 模式内的匹配结果按字母排序，多个模式按数组顺序拼接。
 
+> **Pipeline 工作流**: 如果你使用 OpenSpec + Superpowers + Ralph 的完整流水线，`extraContextPaths` 中的 OpenSpec 路径会自动让 Ralph 的每一轮迭代读取最新的 design.md 和 tasks.md 作为上下文。详见 [Pipeline 使用指南](PIPELINE_GUIDE.md)。
+
 #### 验证设置
 
 | 字段 | 默认值 | 说明 |
 |------|--------|------|
 | `validation.checkGitCommit` | `true` | 会话结束后检查是否产生了包含故事 ID 的 git commit |
-| `validation.patchPrdPasses` | `true` | git commit 存在但 passes 仍为 false 时自动修补 |
+| `validation.patchPrdPasses` | `true` | 只有在会话成功、检测到 completion signal、并通过验证后才自动修补 `passes` |
 | `validation.validatePrdSchema` | `true` | 检查 prd.json 结构完整性 |
+| `validation.acceptanceCommands.typecheck` | `""` | 为 `"Typecheck passes"` 配置可执行命令 |
+| `validation.acceptanceCommands.tests` | `""` | 为 `"Tests pass"` 配置可执行命令 |
 
 #### 权限设置
 
@@ -248,13 +255,14 @@ Ralph 从当前工作目录开始，向上逐级搜索 `ralph.config.json`，直
 | `RALPH_COOLDOWN_SECONDS` | `cooldownSeconds` |
 | `RALPH_PERMISSIONS_MODE` | `permissionsMode` |
 | `RALPH_CLAUDE_MAX_TURNS` | `claude.maxTurns` |
-| `RALPH_CLAUDE_OUTPUT_FORMAT` | `claude.outputFormat` |
 | `RALPH_PROMPTS_AGENT_INSTRUCTION_PATH` | `prompts.agentInstructionPath` |
 | `RALPH_PROMPTS_EXTRA_INSTRUCTIONS` | `prompts.extraInstructions` |
 | `RALPH_PROMPTS_STRICT_SINGLE_STORY` | `prompts.strictSingleStory` |
 | `RALPH_VALIDATION_CHECK_GIT_COMMIT` | `validation.checkGitCommit` |
 | `RALPH_VALIDATION_PATCH_PRD_PASSES` | `validation.patchPrdPasses` |
 | `RALPH_VALIDATION_VALIDATE_PRD_SCHEMA` | `validation.validatePrdSchema` |
+| `RALPH_VALIDATION_ACCEPTANCE_COMMANDS_TYPECHECK` | `validation.acceptanceCommands.typecheck` |
+| `RALPH_VALIDATION_ACCEPTANCE_COMMANDS_TESTS` | `validation.acceptanceCommands.tests` |
 
 示例：
 ```bash
@@ -262,6 +270,41 @@ RALPH_MAX_ITERATIONS=20 RALPH_COOLDOWN_SECONDS=0 ralph
 ```
 
 数值类型会自动转换，布尔类型接受 `"true"` / `"false"`。解析失败时会输出警告并使用原值。
+
+---
+
+## Pipeline CLI 子命令
+
+Ralph 支持通过子命令管理 Pipeline 状态：
+
+```
+ralph pipeline status [--config <dir>]          # 显示管道状态
+ralph pipeline init <feature-name> [--config <dir>]  # 初始化管道
+ralph pipeline advance <phase> [--config <dir>]  # 标记阶段完成
+ralph pipeline check [--config <dir>]            # 粒度检测
+ralph pipeline learnings [--config <dir>]        # 提取经验归档
+ralph pipeline reset [--config <dir>]            # 清除状态
+```
+
+也可以通过独立命令运行：
+
+```bash
+ralph-pipeline status    # 等同于 ralph pipeline status
+```
+
+### 阶段顺序
+
+```
+spec → review → convert → execute
+```
+
+| 命令 | 说明 |
+|------|------|
+| `ralph pipeline init my-feature` | 创建 `.pipeline-state.json`，检测工具可用性 |
+| `ralph pipeline advance spec` | 标记 Phase 1 (OpenSpec) 完成 |
+| `ralph pipeline check` | 检查 prd.json 中每个故事的粒度，报告违规和拆分建议 |
+| `ralph pipeline advance execute` | 标记 Phase 4 完成（ralph 完成所有故事时自动调用） |
+| `ralph pipeline learnings` | 从 progress.txt 提取经验，写入 OpenSpec 或本地归档 |
 
 ---
 

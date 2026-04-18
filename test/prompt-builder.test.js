@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import { writeFileSync, mkdirSync, rmSync } from 'node:fs';
 import { join, sep } from 'node:path';
 import { tmpdir } from 'node:os';
-import { buildPrompt } from '../lib/prompt-builder.js';
+import { buildPrompt, ensurePromptWithinLimit } from '../lib/prompt-builder.js';
 
 /** Convert a local path to forward-slash form for glob patterns (Windows compat) */
 function toPosix(p) { return p.split(sep).join('/'); }
@@ -108,6 +108,19 @@ describe('prompt-builder', () => {
     const { charCount, oversized } = await buildPrompt(longStory, DEFAULT_PROMPTS_CONFIG);
     assert.ok(charCount > 6000);
     assert.equal(oversized, true);
+  });
+
+  it('throws when an oversized prompt is enforced', async () => {
+    const longStory = {
+      ...SAMPLE_STORY,
+      description: 'X'.repeat(7000),
+    };
+    const promptResult = await buildPrompt(longStory, DEFAULT_PROMPTS_CONFIG);
+
+    assert.throws(
+      () => ensurePromptWithinLimit(promptResult, longStory),
+      /Prompt too large for US-001/,
+    );
   });
 
   it('counts sourceCount correctly', async () => {

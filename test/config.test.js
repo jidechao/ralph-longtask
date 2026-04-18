@@ -30,6 +30,8 @@ describe('config', () => {
     assert.equal(config.permissionsMode, 'full');
     assert.equal(config.claude.maxTurns, DEFAULTS.claude.maxTurns);
     assert.equal(config.validation.checkGitCommit, true);
+    assert.equal(config.validation.acceptanceCommands.typecheck, '');
+    assert.equal(config.validation.acceptanceCommands.tests, '');
   });
 
   it('merges file config over defaults', () => {
@@ -137,5 +139,15 @@ describe('config', () => {
     } finally {
       rmSync(join(TEST_DIR, 'ralph.config.json'), { force: true });
     }
+  });
+
+  it('supports env overrides for acceptance commands', () => {
+    process.env.RALPH_VALIDATION_ACCEPTANCE_COMMANDS_TYPECHECK = 'npm run typecheck';
+    process.env.RALPH_VALIDATION_ACCEPTANCE_COMMANDS_TESTS = 'npm test';
+
+    const config = loadConfig(TEST_DIR);
+
+    assert.equal(config.validation.acceptanceCommands.typecheck, 'npm run typecheck');
+    assert.equal(config.validation.acceptanceCommands.tests, 'npm test');
   });
 });

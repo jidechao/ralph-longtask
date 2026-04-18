@@ -43,6 +43,7 @@ describe('validator', () => {
       sessionEnd: new Date().toISOString(),
       validationConfig: DEFAULT_VALIDATION_CONFIG,
       sessionSuccess: true,
+      completionSignaled: true,
     });
     assert.equal(result.valid, true);
     assert.equal(result.patched, true);
@@ -124,8 +125,184 @@ describe('validator', () => {
         validatePrdSchema: true,
       },
       sessionSuccess: true,
+      completionSignaled: true,
     });
     assert.equal(result.valid, false);
     assert.equal(result.reason, 'no-commit');
+  });
+
+  it('returns invalid when commit exists but completion signal is missing', () => {
+    const prdPath = writePrd(TEST_DIR, SAMPLE_PRD);
+    const result = runValidation({
+      prdPath,
+      storyId: 'US-001',
+      sessionStart: new Date().toISOString(),
+      sessionEnd: new Date().toISOString(),
+      validationConfig: {
+        checkGitCommit: true,
+        patchPrdPasses: true,
+        validatePrdSchema: true,
+      },
+      sessionSuccess: true,
+      completionSignaled: false,
+      checkGitCommitImpl: () => ({ found: true }),
+    });
+
+    assert.equal(result.valid, false);
+    assert.equal(result.reason, 'no-completion-signal');
+  });
+
+  it('returns invalid when completion signal exists but no matching commit is found', () => {
+    const prdPath = writePrd(TEST_DIR, SAMPLE_PRD);
+    const result = runValidation({
+      prdPath,
+      storyId: 'US-001',
+      sessionStart: new Date().toISOString(),
+      sessionEnd: new Date().toISOString(),
+      validationConfig: {
+        checkGitCommit: true,
+        patchPrdPasses: true,
+        validatePrdSchema: true,
+      },
+      sessionSuccess: true,
+      completionSignaled: true,
+      checkGitCommitImpl: () => ({ found: false }),
+    });
+
+    assert.equal(result.valid, false);
+    assert.equal(result.reason, 'no-commit');
+  });
+
+  it('does not patch passes when the completion signal is missing', () => {
+    const prdPath = writePrd(TEST_DIR, SAMPLE_PRD);
+    const result = runValidation({
+      prdPath,
+      storyId: 'US-001',
+      sessionStart: new Date().toISOString(),
+      sessionEnd: new Date().toISOString(),
+      validationConfig: {
+        checkGitCommit: true,
+        patchPrdPasses: true,
+        validatePrdSchema: true,
+      },
+      sessionSuccess: true,
+      completionSignaled: false,
+      checkGitCommitImpl: () => ({ found: true }),
+    });
+
+    const reloaded = JSON.parse(readFileSync(prdPath, 'utf-8'));
+    assert.equal(result.valid, false);
+    assert.equal(reloaded.userStories[0].passes, false);
+  });
+
+  it('runs configured acceptance commands for supported criteria', () => {
+    const prdPath = writePrd(TEST_DIR, {
+      userStories: [
+        {
+          id: 'US-001',
+          title: 'Test story',
+          passes: false,
+          priority: 1,
+          acceptanceCriteria: ['Typecheck passes', 'Tests pass'],
+        },
+      ],
+    });
+
+    const result = runValidation({
+      prdPath,
+      storyId: 'US-001',
+      sessionStart: new Date().toISOString(),
+      sessionEnd: new Date().toISOString(),
+      validationConfig: {
+        checkGitCommit: true,
+        patchPrdPasses: true,
+        validatePrdSchema: true,
+        acceptanceCommands: {
+          typecheck: 'node -e "process.exit(0)"',
+          tests: 'node -e "process.exit(0)"',
+        },
+      },
+      sessionSuccess: true,
+      completionSignaled: true,
+      checkGitCommitImpl: () => ({ found: true }),
+    });
+
+    const reloaded = JSON.parse(readFileSync(prdPath, 'utf-8'));
+    assert.equal(result.valid, true);
+    assert.equal(reloaded.userStories[0].passes, true);
+  });
+
+  it('fails validation when a supported acceptance command fails', () => {
+    const prdPath = writePrd(TEST_DIR, {
+      userStories: [
+        {
+          id: 'US-001',
+          title: 'Test story',
+          passes: false,
+          priority: 1,
+          acceptanceCriteria: ['Typecheck passes'],
+        },
+      ],
+    });
+
+    const result = runValidation({
+      prdPath,
+      storyId: 'US-001',
+      sessionStart: new Date().toISOString(),
+      sessionEnd: new Date().toISOString(),
+      validationConfig: {
+        checkGitCommit: true,
+        patchPrdPasses: true,
+        validatePrdSchema: true,
+        acceptanceCommands: {
+          typecheck: 'node -e "process.exit(1)"',
+        },
+      },
+      sessionSuccess: true,
+      completionSignaled: true,
+      checkGitCommitImpl: () => ({ found: true }),
+    });
+
+    const reloaded = JSON.parse(readFileSync(prdPath, 'utf-8'));
+    assert.equal(result.valid, false);
+    assert.equal(result.reason, 'acceptance-check-failed');
+    assert.equal(reloaded.userStories[0].passes, false);
+  });
+
+  it('treats stories with no executable acceptance criteria as informational only', () => {
+    const prdPath = writePrd(TEST_DIR, {
+      userStories: [
+        {
+          id: 'US-001',
+          title: 'Test story',
+          passes: false,
+          priority: 1,
+          acceptanceCriteria: ['Button label is clear'],
+        },
+      ],
+    });
+
+    const result = runValidation({
+      prdPath,
+      storyId: 'US-001',
+      sessionStart: new Date().toISOString(),
+      sessionEnd: new Date().toISOString(),
+      validationConfig: {
+        checkGitCommit: true,
+        patchPrdPasses: true,
+        validatePrdSchema: true,
+        acceptanceCommands: {
+          typecheck: 'node -e "process.exit(0)"',
+          tests: 'node -e "process.exit(0)"',
+        },
+      },
+      sessionSuccess: true,
+      completionSignaled: true,
+      checkGitCommitImpl: () => ({ found: true }),
+    });
+
+    const reloaded = JSON.parse(readFileSync(prdPath, 'utf-8'));
+    assert.equal(result.valid, true);
+    assert.equal(reloaded.userStories[0].passes, true);
   });
 });

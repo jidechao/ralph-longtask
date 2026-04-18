@@ -33,12 +33,12 @@ Append to progress.txt (always append, never overwrite):
 
 The lessons section is critical — it helps future iterations avoid repeat mistakes and better understand the codebase.
 
-## Codebase Section Pattern
+## Codebase Patterns Section
 
-If you discover **reusable patterns** that future iterations should know about, add them to the `## Codebase` section at the top of progress.txt (create it if it doesn't exist). Summarize the most important lessons:
+If you discover **reusable patterns** that future iterations should know about, add them to the `## Codebase Patterns` section at the top of progress.txt (create it if it doesn't exist). Summarize the most important lessons:
 
 ```
-## Codebase
+## Codebase Patterns
 - Example: Aggregate queries use `sql<number>` template
 - Example: Migration scripts must use `IF NOT EXISTS`
 - Example: Export types from actions.ts for UI components
@@ -48,9 +48,7 @@ Only add **general, reusable** patterns — not story-specific details.
 
 ## Update CLAUDE.md Files
 
-Only modify the CLAUDE.md in the script's directory, never the project root CLAUDE.md.
-
-Before committing, check whether modified files have lessons worth saving to a nearby CLAUDE.md:
+Before committing, check whether modified files have lessons worth saving to a nearby CLAUDE.md (but do not modify the project root CLAUDE.md):
 
 1. **Identify directories of modified files** — see which directories you changed
 2. **Find existing CLAUDE.md** — look in those directories or parent directories

@@ -5,11 +5,12 @@ import { execSync } from 'node:child_process';
 import chalk from 'chalk';
 import { loadConfig } from './lib/config.js';
 import { loadPRD, getNextStory } from './lib/prd.js';
-import { buildPrompt } from './lib/prompt-builder.js';
+import { buildPrompt, ensurePromptWithinLimit } from './lib/prompt-builder.js';
 import { findClaudeBinary, executeSession } from './lib/executor.js';
 import { runValidation } from './lib/validator.js';
 import { initProgress, appendProgress } from './lib/progress.js';
 import { checkAndArchive } from './lib/archive.js';
+import { loadPipelineState, getCurrentPhase, advancePhase as advancePipelinePhase } from './lib/pipeline-state.js';
 
 let activeChild = null;
 
@@ -19,22 +20,32 @@ function parseArgs(argv) {
   const args = argv.slice(2);
   let maxIterations = null;
   let configPath = null;
+  let resume = false;
 
   for (let i = 0; i < args.length; i++) {
     if (args[i] === '--config' && args[i + 1]) {
       configPath = args[++i];
+    } else if (args[i] === '--resume') {
+      resume = true;
     } else if (!maxIterations && /^\d+$/.test(args[i])) {
       maxIterations = parseInt(args[i], 10);
     }
   }
 
-  return { maxIterations, configPath };
+  return { maxIterations, configPath, resume };
 }
 
 // --- Main loop ---
 
 async function main() {
-  const { maxIterations: cliMax, configPath } = parseArgs(process.argv);
+  // Subcommand dispatch: ralph pipeline <args>
+  if (process.argv[2] === 'pipeline') {
+    const { runPipelineCommand } = await import('./lib/pipeline-cli.js');
+    runPipelineCommand(process.argv.slice(3));
+    return;
+  }
+
+  const { maxIterations: cliMax, configPath, resume } = parseArgs(process.argv);
 
   // Load config
   let config;
@@ -50,6 +61,18 @@ async function main() {
     config.maxIterations = cliMax;
   }
 
+  const projectDir = config._configDir || process.cwd();
+
+  if (resume) {
+    const pipelineState = loadPipelineState(projectDir);
+    const pipelinePhase = getCurrentPhase(pipelineState);
+    if (pipelineState && pipelinePhase && pipelinePhase !== 'execute') {
+      const { runPipelineCommand } = await import('./lib/pipeline-cli.js');
+      runPipelineCommand(['resume', '--config', projectDir]);
+      return;
+    }
+  }
+
   // Verify Claude CLI is available
   try {
     findClaudeBinary();
@@ -58,25 +81,31 @@ async function main() {
     process.exit(1);
   }
 
-  // Init progress
-  initProgress(config.progressPath);
+  // Init progress (skip on resume to preserve existing data)
+  if (!resume) {
+    initProgress(config.progressPath);
+  } else {
+    console.log(chalk.cyan('Resuming from existing state...'));
+  }
 
-  // Check for branch change and archive previous run
-  try {
-    const prd = loadPRD(config.prdPath);
-    if (prd.branchName) {
-      const result = checkAndArchive({
-        configDir: config._configDir || process.cwd(),
-        prdPath: config.prdPath,
-        progressPath: config.progressPath,
-        branchName: prd.branchName,
-      });
-      if (result.archived) {
-        console.log(chalk.yellow(`Archived previous run to ${result.archivePath}`));
+  // Check for branch change and archive previous run (skip on resume)
+  if (!resume) {
+    try {
+      const prd = loadPRD(config.prdPath);
+      if (prd.branchName) {
+        const result = checkAndArchive({
+          configDir: config._configDir || process.cwd(),
+          prdPath: config.prdPath,
+          progressPath: config.progressPath,
+          branchName: prd.branchName,
+        });
+        if (result.archived) {
+          console.log(chalk.yellow(`Archived previous run to ${result.archivePath}`));
+        }
       }
+    } catch (e) {
+      // No prd.json yet or parse error — skip archive check
     }
-  } catch (e) {
-    // No prd.json yet or parse error — skip archive check
   }
 
   // Main loop
@@ -121,7 +150,20 @@ async function main() {
     } catch (e) { console.warn('ralph: PRD backup warning:', e.message); }
 
     // Build prompt
-    const { prompt } = await buildPrompt(story, config.prompts, prd);
+    const promptResult = await buildPrompt(story, config.prompts, prd);
+    const { prompt } = promptResult;
+    try {
+      ensurePromptWithinLimit(promptResult, story);
+    } catch (err) {
+      console.error(chalk.red(err.message));
+      appendProgress(config.progressPath, {
+        storyId: story.id,
+        summary: `Prompt blocked: ${err.message}`,
+        failed: true,
+      });
+      cleanupBackup(config.prdPath);
+      process.exit(1);
+    }
 
     // Execute session
     const sessionStart = new Date().toISOString();
@@ -164,6 +206,7 @@ async function main() {
           sessionEnd,
           validationConfig: config.validation,
           sessionSuccess: !result.error,
+          completionSignaled: result.completionSignaled,
         });
 
         if (!validation.valid) {
@@ -208,6 +251,25 @@ async function main() {
       const updatedPrd = loadPRD(config.prdPath);
       if (!getNextStory(updatedPrd)) {
         cleanupBackup(config.prdPath);
+        // Update pipeline state if active
+        try {
+          const pipelineState = loadPipelineState(projectDir);
+          if (pipelineState && !pipelineState.completedPhases.includes('execute')) {
+            advancePipelinePhase(projectDir, 'execute');
+            console.log(chalk.dim('Pipeline state updated: execute phase complete.'));
+          }
+        } catch {
+          // Pipeline state not available — skip
+        }
+        try {
+          const { archivePipelineLearnings } = await import('./lib/pipeline-cli.js');
+          const learnings = archivePipelineLearnings(projectDir, config);
+          if (learnings.status === 'archived') {
+            console.log(chalk.dim(`Pipeline learnings archived: ${learnings.path}`));
+          }
+        } catch {
+          // Learnings archive is best-effort
+        }
         console.log(chalk.green('\nAll stories completed!'));
         process.exit(0);
       }
