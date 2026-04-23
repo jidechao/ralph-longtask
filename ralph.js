@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 
-import { copyFileSync, existsSync, unlinkSync } from 'node:fs';
+import { copyFileSync, existsSync, unlinkSync, realpathSync } from 'node:fs';
 import { readFileSync } from 'node:fs';
 import { execSync } from 'node:child_process';
 import { join, resolve } from 'node:path';
@@ -8,7 +8,7 @@ import { fileURLToPath } from 'node:url';
 import chalk from 'chalk';
 import { loadConfig } from './lib/config.js';
 import { loadPRD, getIncompleteStories, getNextStory } from './lib/prd.js';
-import { buildPrompt, ensurePromptWithinLimit } from './lib/prompt-builder.js';
+import { buildPrompt, ensureStoryWithinLimit } from './lib/prompt-builder.js';
 import { findClaudeBinary, executeSession } from './lib/executor.js';
 import { runValidation } from './lib/validator.js';
 import { initProgress, appendProgress } from './lib/progress.js';
@@ -616,7 +616,7 @@ async function main() {
     const promptResult = await buildPrompt(story, config.prompts, prd);
     const { prompt } = promptResult;
     try {
-      ensurePromptWithinLimit(promptResult, story);
+      ensureStoryWithinLimit(story);
     } catch (err) {
       console.error(chalk.red(err.message));
       appendProgress(config.progressPath, {
@@ -842,9 +842,13 @@ process.on('SIGINT', () => {
   process.exit(130);
 });
 
-const isEntrypoint = process.argv[1] ? resolve(process.argv[1]) === fileURLToPath(import.meta.url) : false;
+// Check if this module is the direct entry point.
+// We compare the real (dereferenced) paths because npm link creates
+// junctions/symlinks — argv[1] may differ from import.meta.url on Windows.
+const _realArgv = realpathSync(resolve(process.argv[1] || ''));
+const _realSelf = realpathSync(fileURLToPath(import.meta.url));
 
-if (isEntrypoint) {
+if (_realSelf === _realArgv) {
   main().catch((err) => {
     console.error(chalk.red(`Fatal: ${err.message}`));
     process.exit(1);

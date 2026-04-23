@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import { writeFileSync, mkdirSync, rmSync } from 'node:fs';
 import { join, sep } from 'node:path';
 import { tmpdir } from 'node:os';
-import { buildPrompt, ensurePromptWithinLimit } from '../lib/prompt-builder.js';
+import { buildPrompt, ensureStoryWithinLimit } from '../lib/prompt-builder.js';
 
 /** Convert a local path to forward-slash form for glob patterns (Windows compat) */
 function toPosix(p) { return p.split(sep).join('/'); }
@@ -100,26 +100,24 @@ describe('prompt-builder', () => {
     assert.ok(prompt.includes('Follow TDD strictly'));
   });
 
-  it('reports charCount and oversized correctly', async () => {
+  it('reports charCount correctly', async () => {
     const longStory = {
       ...SAMPLE_STORY,
       description: 'X'.repeat(7000),
     };
-    const { charCount, oversized } = await buildPrompt(longStory, DEFAULT_PROMPTS_CONFIG);
+    const { charCount } = await buildPrompt(longStory, DEFAULT_PROMPTS_CONFIG);
     assert.ok(charCount > 6000);
-    assert.equal(oversized, true);
   });
 
-  it('throws when an oversized prompt is enforced', async () => {
+  it('throws when a story itself exceeds the limit', () => {
     const longStory = {
       ...SAMPLE_STORY,
       description: 'X'.repeat(7000),
     };
-    const promptResult = await buildPrompt(longStory, DEFAULT_PROMPTS_CONFIG);
 
     assert.throws(
-      () => ensurePromptWithinLimit(promptResult, longStory),
-      /Prompt too large for US-001/,
+      () => ensureStoryWithinLimit(longStory),
+      /Story US-001 too large/,
     );
   });
 
